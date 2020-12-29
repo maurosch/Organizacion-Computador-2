@@ -1,0 +1,81 @@
+@startditaa ReforzarBrillo
+
+Definimos los siguientes registros ,  el digito menos significativo esta a la izquierda
+
++-----------+-----------+-----------+-----------+
+| umbralSup | umbralSup | umbralSup | umbralSup |  [int32] = xmm_superior
++-----------+-----------+-----------+-----------+
+
++-----------+-----------+-----------+-----------+
+| umbralInf | umbralInf | umbralInf | umbralInf |  [int32] = xmm_inferior
++-----------+-----------+-----------+-----------+
+
+Usando los brillos saturados definimos estos
+
++-----------+-----------+-----------+---+-----------+-----------+-----------+---+
+| brilloSup | brilloSup | brilloSup | 0 | brilloSup | brilloSup | brilloSup | 0 | [int16] = xmm_mask_superior
++-----------+-----------+-----------+---+-----------+-----------+-----------+---+
+
++-----------+-----------+-----------+---+-----------+-----------+-----------+---+
+| brilloInf | brilloInf | brilloInf | 0 | brilloInf | brilloinf | brilloInf | 0 | [int16] = xmm_mask_inferior
++-----------+-----------+-----------+---+-----------+-----------+-----------+---+
+
+
+En memoria partimos cargando el pixel en i,j
+
++----+----+----+----+----+----+----+----+
+| b0 | g0 | r0 | a0 | b1 | g1 | r1 | a1 | [uint8]
++----+----+----+----+----+----+----+----+
+
+Usando pmovzxbw en un registro xmm 
+
++----+----+----+----+----+----+----+----+
+| b0 | g0 | r0 | a0 | b1 | g1 | r1 | a1 | [int16]
++----+----+----+----+----+----+----+----+
+
+Cargamos un registro con 
+
++---+---+---+---+---+---+---+---+
+| 1 | 2 | 1 | 0 | 1 | 2 | 1 | 0 | [int16]
++---+---+---+---+---+---+---+---+
+
+pmaddwd de estos registros
+
++-----------------+-----------------+-----------------+-----------------+
+| 1 * b0 + 2 * g0 | 1 * r0 + 0 * a0 | 1 * b1 + 2 * g1 | 1 * r1 + 0 * a1 |  [int]32
++-----------------+-----------------+-----------------+-----------------+
+
+usa suma horizontal con phaddd
+
++-----------------------------------+-----------------------------------+-----------------------------------+-----------------------------------+
+| 1 * b0 + 2 * g0 + 1 * r0 + 0 * a0 | 1 * b1 + 2 * g1 | 1 * r1 + 0 * a1 | 1 * b0 + 2 * g0 + 1 * r0 + 0 * a0 | 1 * b1 + 2 * g1 | 1 * r1 + 0 * a1 |  [int32]
++-----------------------------------+-----------------------------------+-----------------------------------+-----------------------------------+
+
+lo que es
+
++-----+-----+-----+-----+
+| b_0 | b_1 | b_0 | b_1 | 
++-----+-----+-----+-----+
+
+luego comparamos con el limite superior usando pcmpgtd usando xmm_superior
+
++-----------------+-----------------+-----------------+-----------------+
+| b_0 > umbralSup | b_1 > umbralSup | b_0 > umbralSup | b_1 > umbralSup | [int32] 
++-----------------+-----------------+-----------------+-----------------+
+
+reacomodo la mascara con punpckldq
+
++-----------------+-----------------+-----------------+-----------------+
+| b_0 > umbralSup | b_0 > umbralSup | b_1 > umbralSup | b_1 > umbralSup | [in32]
++-----------------+-----------------+-----------------+-----------------+
+
+luego un pand con xmm_mask_superior daria valor 0 ó brilloSup segun corresponda
+
+Analagomente pero para el umbralInf obtenemos el otro registro
+
+luego usamos paddusw y psubusw a los valores en src
+
+por ultimo utilizando packuswb , convertimos los valores a los dos pixeles adjacentes
+y los guardamos en dst
+
+@endditaa
